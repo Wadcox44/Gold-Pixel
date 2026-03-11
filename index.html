@@ -1,1 +1,1448 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>Gold Pixel — Mobile HUD</title>
 
+  <style>
+    :root{
+      --bg:#05070c;
+      --panel:#0b1018;
+      --panel2:#0a0e15;
+      --text:#e7eef8;
+      --muted:#93a3ba;
+
+      --gold:#d6a63a;
+      --gold2:#f0c85a;
+
+      --cyan:#37c6ff;
+      --red:#ff3b3b;
+      --green:#27d17c;
+
+      --stroke:rgba(214,166,58,.28);
+      --stroke2:rgba(214,166,58,.14);
+      --shadow: 0 14px 40px rgba(0,0,0,.55);
+      --r:16px;
+
+      --safeBottom: env(safe-area-inset-bottom);
+      --safeTop: env(safe-area-inset-top);
+    }
+
+    *{box-sizing:border-box;}
+    html,body{height:100%; margin:0; background:var(--bg); color:var(--text); overflow:hidden;
+      font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;}
+
+    body:before{
+      content:""; position:fixed; inset:0; pointer-events:none; opacity:.85;
+      background-image:
+        radial-gradient(1px 1px at 10% 20%, rgba(255,255,255,.10) 0, transparent 1px),
+        radial-gradient(1px 1px at 70% 40%, rgba(214,166,58,.14) 0, transparent 1px),
+        radial-gradient(1px 1px at 30% 70%, rgba(55,198,255,.10) 0, transparent 1px);
+      background-size: 240px 240px, 280px 280px, 320px 320px;
+    }
+
+    /* === ORIENTATION (soft lock) === */
+    .orientOverlay{
+      position:fixed; inset:0; z-index:9999;
+      display:none; align-items:center; justify-content:center;
+      padding:18px;
+      background:rgba(0,0,0,.72);
+      backdrop-filter: blur(8px);
+    }
+    .orientOverlay.show{display:flex;}
+    .orientCard{
+      width:min(520px, 100%);
+      border-radius:18px;
+      border:1px solid rgba(255,255,255,.10);
+      background:linear-gradient(180deg, rgba(12,17,27,.95), rgba(10,15,24,.86));
+      box-shadow: var(--shadow);
+      padding:16px;
+    }
+    .orientCard h2{
+      margin:0 0 8px 0;
+      font-size:14px;
+      letter-spacing:.16em;
+      text-transform:uppercase;
+      color:var(--gold2);
+      display:flex;
+      gap:10px;
+      align-items:center;
+    }
+    .orientCard p{
+      margin:0 0 14px 0;
+      color:var(--muted);
+      line-height:1.4;
+      font-size:12px;
+    }
+    .rowBtns{display:flex; gap:10px; flex-wrap:wrap;}
+    .btn{
+      appearance:none; border:none; cursor:pointer;
+      padding:10px 12px; border-radius:14px;
+      background:rgba(214,166,58,.12);
+      color:var(--gold2);
+      border:1px solid rgba(214,166,58,.28);
+      font-weight:900; letter-spacing:.08em; text-transform:uppercase; font-size:11px;
+      display:inline-flex; align-items:center; justify-content:center; gap:8px;
+      user-select:none;
+    }
+    .btn.ghost{background:rgba(255,255,255,.06); color:var(--text); border:1px solid rgba(255,255,255,.10);}
+    .btn.red{background:rgba(255,59,59,.14); border:1px solid rgba(255,59,59,.35); color:#ffd2d2;}
+    .btn:active{transform: translateY(1px);}
+
+    /* === APP LAYOUT === */
+    .app{
+      position:fixed; inset:0;
+      display:flex; flex-direction:column;
+      padding-top: calc(10px + var(--safeTop));
+    }
+
+    /* Top title */
+    .titleBar{
+      margin:0 10px;
+      border:1px solid var(--stroke2);
+      border-radius:18px;
+      background:linear-gradient(180deg, rgba(12,17,27,.92), rgba(5,7,12,.52));
+      backdrop-filter: blur(10px);
+      box-shadow: var(--shadow);
+      padding:10px 12px;
+      display:flex; align-items:center; justify-content:center;
+      position:relative;
+      min-height:52px;
+    }
+    .titleText{
+      font-weight:1000;
+      letter-spacing:.22em;
+      text-transform:uppercase;
+      color:var(--gold2);
+      font-size:14px;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      text-shadow: 0 0 18px rgba(214,166,58,.15);
+    }
+    .titleText .crown{filter: drop-shadow(0 0 10px rgba(214,166,58,.18));}
+
+    /* Player / Pi row */
+    .subBar{
+      margin:10px 10px 0 10px;
+      display:flex;
+      gap:10px;
+      align-items:stretch;
+    }
+    .pill{
+      flex:1;
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:18px;
+      background:rgba(10,15,24,.65);
+      box-shadow: var(--shadow);
+      padding:10px 12px;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      min-width:0;
+    }
+    .avatar{
+      width:34px;height:34px;border-radius:50%;
+      background:linear-gradient(135deg, rgba(55,198,255,.35), rgba(214,166,58,.35));
+      border:1px solid rgba(255,255,255,.14);
+      flex:0 0 auto;
+    }
+    .nameBlock{min-width:0; display:flex; flex-direction:column; line-height:1.15;}
+    .nameBlock .name{font-weight:900; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+    .nameBlock .sub{font-size:11px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+
+    .packTag{
+      margin-left:auto;
+      font-size:11px;
+      font-weight:1000;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      color:var(--gold2);
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid var(--stroke);
+      background:rgba(214,166,58,.10);
+      white-space:nowrap;
+      flex:0 0 auto;
+    }
+
+    .flag{
+      width:20px; height:14px;
+      border-radius:3px;
+      overflow:hidden;
+      border:1px solid rgba(255,255,255,.14);
+      display:grid;
+      grid-template-columns:repeat(3,1fr);
+      flex:0 0 auto;
+    }
+    .flag span:nth-child(1){background:#0055a4;}
+    .flag span:nth-child(2){background:#fff;}
+    .flag span:nth-child(3){background:#ef4135;}
+
+    .piBox{
+      width:min(180px, 42vw);
+      justify-content:space-between;
+    }
+    .piBox .label{font-size:10px; color:var(--muted); letter-spacing:.12em; text-transform:uppercase;}
+    .piBox .piVal{font-weight:1000; color:var(--gold2); font-size:14px;}
+    .piBox .piVal small{font-weight:900; color:rgba(240,200,90,.9);}
+
+    /* Status row (sentinel / reservoir / dome) */
+    .statusRow{
+      margin:10px 10px 0 10px;
+      display:grid;
+      gap:10px;
+      grid-template-columns: 1fr 1.3fr 1fr;
+      align-items:stretch;
+    }
+
+    .card{
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:18px;
+      background:rgba(10,15,24,.65);
+      box-shadow: var(--shadow);
+      padding:10px 12px;
+      min-width:0;
+    }
+    .card .head{
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      margin-bottom:8px;
+    }
+    .card .ttl{
+      font-size:10px;
+      color:var(--muted);
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      font-weight:900;
+      display:flex; align-items:center; gap:8px;
+    }
+    .big{
+      font-size:14px;
+      font-weight:1000;
+      color:var(--gold2);
+      white-space:nowrap;
+    }
+    .big.cyan{color:var(--cyan);}
+    .big.muted{color:rgba(147,163,186,.75);}
+    .bar{
+      height:6px;
+      border-radius:999px;
+      background:rgba(255,255,255,.08);
+      overflow:hidden;
+      margin:8px 0 6px 0;
+    }
+    .bar > i{
+      display:block;
+      height:100%;
+      width:0%;
+      background:linear-gradient(90deg, rgba(214,166,58,.18), rgba(214,166,58,.85));
+    }
+    .miniRow{display:flex; justify-content:space-between; align-items:center; gap:10px;}
+    .miniRow .k{font-size:10px; color:var(--muted); letter-spacing:.10em; text-transform:uppercase;}
+    .miniRow .v{font-size:12px; font-weight:1000; color:var(--text);}
+
+    .sentinelBtn{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      cursor:pointer;
+      user-select:none;
+    }
+    .sentinelDot{
+      width:12px; height:12px; border-radius:50%;
+      background:rgba(55,198,255,.9);
+      box-shadow:0 0 14px rgba(55,198,255,.28);
+      flex:0 0 auto;
+    }
+    .sentinelTxt{
+      font-weight:1000;
+      font-size:13px;
+      color:var(--text);
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      flex:1;
+    }
+
+    /* blink when alert */
+    .alert .sentinelDot{
+      background:rgba(255,59,59,.95);
+      box-shadow:0 0 18px rgba(255,59,59,.45);
+      animation: blink 1s infinite;
+    }
+    @keyframes blink{
+      0%,100%{transform:scale(1); opacity:1;}
+      50%{transform:scale(1.15); opacity:.55;}
+    }
+
+    /* Canvas frame */
+    .main{
+      margin:10px 10px 0 10px;
+      flex:1;
+      position:relative;
+      border:1px solid var(--stroke2);
+      border-radius:20px;
+      background:rgba(0,0,0,.18);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+      min-height: 160px;
+    }
+    .main:before{
+      content:""; position:absolute; inset:0; pointer-events:none;
+      border:1px solid rgba(214,166,58,.18); border-radius:20px;
+      box-shadow: inset 0 0 0 1px rgba(214,166,58,.08), inset 0 0 60px rgba(0,0,0,.45);
+    }
+
+    .boardViewport{position:absolute; inset:0; overflow:hidden; touch-action:none;}
+    .boardLayer{position:absolute; left:50%; top:50%;
+      transform: translate(-50%, -50%); transform-origin: 0 0; will-change: transform;}
+    canvas#board{display:block; image-rendering:pixelated; background: rgba(0,0,0,.35);}
+
+    .coordsBadge{
+      position:absolute;
+      left:12px;
+      bottom:12px;
+      z-index:5;
+      padding:8px 10px;
+      border-radius:14px;
+      border:1px solid rgba(255,255,255,.10);
+      background:rgba(10,15,24,.72);
+      box-shadow: var(--shadow);
+      color:var(--muted);
+      font-size:12px;
+      backdrop-filter: blur(8px);
+      user-select:none;
+      pointer-events:none;
+    }
+    .coordsBadge b{color:var(--text);}
+
+    /* Bottom palette + actions (always visible in “place mode”) */
+    .bottomDock{
+      margin:10px 10px calc(10px + var(--safeBottom)) 10px;
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:20px;
+      background:linear-gradient(180deg, rgba(12,17,27,.92), rgba(10,15,24,.72));
+      box-shadow: var(--shadow);
+      padding:10px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      backdrop-filter: blur(10px);
+    }
+
+    .paletteRow{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    .tabBtn{
+      height:40px;
+      padding:0 12px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.10);
+      background:rgba(255,255,255,.06);
+      color:var(--text);
+      font-weight:1000;
+      font-size:11px;
+      letter-spacing:.12em;
+      text-transform:uppercase;
+      cursor:pointer;
+      user-select:none;
+    }
+    .tabBtn.active{
+      border-color: rgba(214,166,58,.45);
+      background:rgba(214,166,58,.12);
+      color:var(--gold2);
+    }
+
+    .swatches{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      overflow:auto;
+      scrollbar-width:none;
+      -ms-overflow-style:none;
+      padding-bottom:2px;
+      flex:1;
+      min-width: 180px;
+    }
+    .swatches::-webkit-scrollbar{display:none;}
+
+    .sw{
+      width:28px; height:28px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.14);
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,.20);
+      cursor:pointer;
+      flex:0 0 auto;
+      transition: transform .12s ease, box-shadow .12s ease;
+    }
+    .sw.active{
+      transform: scale(1.18);
+      box-shadow: 0 0 0 3px rgba(55,198,255,.22), 0 0 22px rgba(55,198,255,.18);
+      border-color: rgba(55,198,255,.55);
+    }
+
+    .selectedColor{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      border-radius:16px;
+      border:1px solid rgba(255,255,255,.10);
+      background:rgba(255,255,255,.05);
+      padding:8px 10px;
+      min-width: 180px;
+    }
+    .bigSw{
+      width:36px; height:36px;
+      border-radius:14px;
+      border:1px solid rgba(255,255,255,.14);
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,.2);
+      flex:0 0 auto;
+    }
+    .colTxt{display:flex; flex-direction:column; line-height:1.1; min-width:0;}
+    .colTxt b{font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+    .colTxt span{font-size:10px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+    input[type="color"]{width:44px;height:34px; border:none; background:transparent; padding:0; cursor:pointer;}
+    .miniIcon{
+      width:44px;height:34px;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.10);
+      background:rgba(255,255,255,.06);
+      display:flex; align-items:center; justify-content:center;
+      cursor:pointer; user-select:none;
+      font-size:16px;
+    }
+    .miniIcon.active{
+      border-color: rgba(55,198,255,.45);
+      box-shadow:0 0 18px rgba(55,198,255,.18);
+    }
+
+    .actionRow{
+      display:grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap:10px;
+      align-items:center;
+    }
+    .slot{
+      border-radius:16px;
+      border:1px solid rgba(255,255,255,.10);
+      background:rgba(255,255,255,.05);
+      padding:8px;
+      min-height:54px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:10px;
+      min-width:0;
+    }
+    .slot.left{justify-content:flex-start;}
+    .slot.right{justify-content:flex-end;}
+    .slot.center{justify-content:center;}
+
+    .tiny{
+      font-size:10px;
+      color:var(--muted);
+      letter-spacing:.10em;
+      text-transform:uppercase;
+      font-weight:900;
+    }
+    .coordsMini{
+      font-weight:1000;
+      font-size:12px;
+      color:var(--text);
+      white-space:nowrap;
+    }
+    .layerBtn{
+      height:38px;
+      padding:0 12px;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.10);
+      background:rgba(255,255,255,.06);
+      color:var(--text);
+      font-weight:1000;
+      cursor:pointer;
+      user-select:none;
+      font-size:11px;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+    }
+
+    /* Toast */
+    .toast{
+      position:fixed;
+      left:50%;
+      top: calc(12px + var(--safeTop));
+      transform: translateX(-50%);
+      z-index:400;
+      padding:10px 12px;
+      border-radius:14px;
+      border:1px solid rgba(255,255,255,.10);
+      background:rgba(10,15,24,.78);
+      box-shadow: var(--shadow);
+      color:var(--text);
+      font-size:12px;
+      opacity:0;
+      pointer-events:none;
+      transition: opacity .18s ease;
+      max-width: min(680px, calc(100% - 24px));
+      backdrop-filter: blur(10px);
+    }
+    .toast.show{opacity:1;}
+    .toast i{color:var(--gold2); font-style:normal; font-weight:1000;}
+
+    /* === SHOP MODAL === */
+    .modalBackdrop{
+      position:fixed; inset:0; z-index:500;
+      background:rgba(0,0,0,.60);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding:16px;
+      backdrop-filter: blur(8px);
+    }
+    .modalBackdrop.show{display:flex;}
+    .modal{
+      width:min(920px, 100%);
+      max-height:min(720px, 100%);
+      overflow:auto;
+      border-radius:18px;
+      border:1px solid var(--stroke2);
+      background:linear-gradient(180deg, rgba(12,17,27,.96), rgba(10,15,24,.86));
+      box-shadow:var(--shadow);
+      padding:14px;
+    }
+    .modalHeader{
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      padding:6px 4px 12px 4px;
+      border-bottom:1px solid rgba(255,255,255,.08);
+      margin-bottom:12px;
+    }
+    .modalHeader h2{
+      margin:0; font-size:14px; letter-spacing:.18em; text-transform:uppercase; color:var(--gold2);
+      display:flex; align-items:center; gap:10px;
+    }
+    .closeBtn{
+      height:36px; padding:0 12px;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.10);
+      background:rgba(255,255,255,.06);
+      color:var(--text);
+      font-weight:1000;
+      cursor:pointer;
+    }
+    .grid{
+      display:grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap:12px;
+    }
+    .shopCard{
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:16px;
+      background:rgba(0,0,0,.18);
+      padding:12px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      min-height:150px;
+    }
+    .shopCard h3{margin:0; font-size:12px; letter-spacing:.10em; text-transform:uppercase;}
+    .shopCard p{margin:0; font-size:11px; color:var(--muted); line-height:1.35;}
+    .price{margin-top:auto; display:flex; align-items:center; justify-content:space-between; gap:8px;}
+    .price .tag{font-weight:1000; color:var(--gold2);}
+    .price button{height:38px; border-radius:12px; font-size:11px;}
+    .inputRow{display:flex; gap:8px; align-items:center;}
+    .inputRow input{
+      flex:1;
+      height:38px;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.10);
+      background:rgba(255,255,255,.06);
+      color:var(--text);
+      padding:0 10px;
+      outline:none;
+    }
+
+    /* === PLACE MODE: hide ALL HUD except bottomDock === */
+    body.placeMode .titleBar,
+    body.placeMode .subBar,
+    body.placeMode .statusRow{display:none;}
+    body.placeMode .app{padding-top:0;}
+    body.placeMode .main{margin-top:10px;}
+
+    /* Responsive tweaks */
+    @media (max-width: 720px){
+      .statusRow{grid-template-columns: 1fr 1.1fr 1fr;}
+      .piBox{width:min(160px, 44vw);}
+      .actionRow{grid-template-columns: 1fr 1fr 1fr;}
+    }
+    @media (max-width: 560px){
+      .statusRow{grid-template-columns: 1fr;}
+      .piBox{width:min(160px, 48vw);}
+      .grid{grid-template-columns: 1fr;}
+      .selectedColor{min-width: 160px;}
+      .sw{width:26px;height:26px;}
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Soft lock overlay (portrait) -->
+  <div class="orientOverlay" id="orientOverlay">
+    <div class="orientCard">
+      <h2>📱 Passe en paysage</h2>
+      <p>
+        Gold Pixel est plus confortable en <b>paysage</b> (canevas + palette + HUD).
+        Tu peux continuer en portrait si tu veux.
+      </p>
+      <div class="rowBtns">
+        <button class="btn" id="btnContinuePortrait">Continuer en portrait</button>
+        <button class="btn ghost" id="btnOk">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <div class="app" id="app">
+    <!-- TITLE -->
+    <div class="titleBar">
+      <div class="titleText"><span class="crown">👑</span> GOLD PIXEL</div>
+    </div>
+
+    <!-- PLAYER / PI -->
+    <div class="subBar">
+      <div class="pill">
+        <div class="avatar"></div>
+        <div class="nameBlock">
+          <div class="name" id="playerName">Soldat_7749</div>
+          <div class="sub" id="playerSub">G1 • Recrue</div>
+        </div>
+        <div class="packTag" id="packTag">Élite</div>
+        <div class="flag" aria-label="Drapeau"><span></span><span></span><span></span></div>
+      </div>
+
+      <div class="pill piBox" title="Solde Pi">
+        <div>
+          <div class="label">Solde Pi</div>
+          <div class="piVal"><span id="piBalance">0.0</span> <small>π</small></div>
+        </div>
+        <button class="btn ghost" id="hudToggleBtn" title="Masquer/Afficher HUD">HUD</button>
+      </div>
+    </div>
+
+    <!-- STATUS ROW -->
+    <div class="statusRow">
+      <div class="card sentinelBtn" id="sentinelBtn" title="Sentinelle">
+        <div class="head">
+          <div class="ttl"><span class="sentinelDot" id="sentinelDot"></span> Sentinelle</div>
+          <div class="big" id="sentinelState">OK</div>
+        </div>
+        <div class="miniRow">
+          <div class="k">Statut</div>
+          <div class="v" id="sentinelTxt">Surveillance</div>
+        </div>
+      </div>
+
+      <div class="card" title="Réservoir">
+        <div class="head">
+          <div class="ttl">Réservoir</div>
+          <div class="big"><span id="stockNow">0</span>/<span id="stockMax">0</span></div>
+        </div>
+        <div class="bar"><i id="stockBar"></i></div>
+        <div class="miniRow">
+          <div class="k">Prochain pixel</div>
+          <div class="v" id="cooldownTxt">--:--</div>
+        </div>
+      </div>
+
+      <div class="card" id="domeCard" title="Dôme">
+        <div class="head">
+          <div class="ttl">Dôme</div>
+          <div class="big cyan" id="shieldTxt">Inactif</div>
+        </div>
+        <div class="bar"><i id="shieldBar" style="width:0%"></i></div>
+        <div class="miniRow">
+          <div class="k">Temps restant</div>
+          <div class="v" id="shieldTime">--:--:--</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CANVAS -->
+    <div class="main">
+      <div class="boardViewport" id="viewport">
+        <div class="boardLayer" id="layer">
+          <canvas id="board"></canvas>
+        </div>
+      </div>
+      <div class="coordsBadge" id="coordsBadge">X: <b>0</b> | Y: <b>0</b></div>
+    </div>
+
+    <!-- BOTTOM DOCK -->
+    <div class="bottomDock">
+      <div class="paletteRow">
+        <button class="tabBtn active" id="tabStd">Standard</button>
+        <button class="tabBtn" id="tabPrem">Premium</button>
+
+        <div class="swatches" id="swatches"></div>
+
+        <div class="selectedColor">
+          <div class="bigSw" id="bigSw"></div>
+          <div class="colTxt">
+            <b id="colorName">Rouge vif</b>
+            <span id="colorHex">#FF0000</span>
+          </div>
+          <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+            <button class="miniIcon" id="pipetteBtn" title="Pipette">🧪</button>
+            <input type="color" id="colorEl" value="#ff0000" title="Choisir une couleur" />
+          </div>
+        </div>
+      </div>
+
+      <div class="actionRow">
+        <div class="slot left">
+          <button class="btn red" id="undoBtn" style="display:none;">⟲ Annuler</button>
+        </div>
+
+        <div class="slot center">
+          <button class="btn" id="shopBtn">⚔ Boutique</button>
+        </div>
+
+        <div class="slot right">
+          <button class="layerBtn" id="layerBtn">Calque</button>
+          <div style="display:flex; flex-direction:column; align-items:flex-end; line-height:1.1; min-width:0;">
+            <div class="tiny">Coordonnées</div>
+            <div class="coordsMini" id="coordsMini">0 ; 0</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SHOP MODAL -->
+  <div class="modalBackdrop" id="shopBackdrop" role="dialog" aria-modal="true">
+    <div class="modal">
+      <div class="modalHeader">
+        <h2>⚔ Boutique</h2>
+        <button class="closeBtn" id="shopClose">Fermer</button>
+      </div>
+
+      <div class="grid">
+        <div class="shopCard">
+          <h3>Chargeur moyen</h3>
+          <p>+100 pixels. Peut dépasser le stock max (overfill).</p>
+          <div class="price">
+            <div class="tag">1 Pi</div>
+            <button class="btn" data-buy="px100">Acheter</button>
+          </div>
+        </div>
+
+        <div class="shopCard">
+          <h3>Grand chargeur</h3>
+          <p>+250 pixels. Overfill autorisé.</p>
+          <div class="price">
+            <div class="tag">2 Pi</div>
+            <button class="btn" data-buy="px250">Acheter</button>
+          </div>
+        </div>
+
+        <div class="shopCard">
+          <h3>Dôme 4 heures</h3>
+          <p>Active un dôme (timer + HUD). La protection de zone viendra ensuite.</p>
+          <div class="price">
+            <div class="tag">0.5 Pi</div>
+            <button class="btn" data-buy="dome4">Activer</button>
+          </div>
+        </div>
+
+        <div class="shopCard">
+          <h3>Dôme 8 heures</h3>
+          <p>Active un dôme 8h (timer + HUD).</p>
+          <div class="price">
+            <div class="tag">1 Pi</div>
+            <button class="btn" data-buy="dome8">Activer</button>
+          </div>
+        </div>
+
+        <div class="shopCard">
+          <h3>Don “Distinction”</h3>
+          <p>Don de soutien à une œuvre (MVP : log + futur compteur).</p>
+          <div class="price">
+            <div class="tag">0.1 Pi</div>
+            <button class="btn" data-buy="don01">Donner</button>
+          </div>
+        </div>
+
+        <div class="shopCard">
+          <h3>Don anonyme</h3>
+          <p>Soutien discret à un joueur (MVP : saisie + log).</p>
+          <div class="inputRow">
+            <input id="anonTo" placeholder="Pseudo cible (ex: Soldat_1234)" />
+          </div>
+          <div class="price">
+            <div class="tag">0.1 Pi</div>
+            <button class="btn" data-buy="donAnon">Envoyer</button>
+          </div>
+        </div>
+
+        <div class="shopCard">
+          <h3>Offrir l’Élite</h3>
+          <p>Le vrai paiement arrivera avec le login Pi Browser.</p>
+          <div class="inputRow">
+            <input id="giftTo" placeholder="Pseudo cible" />
+          </div>
+          <div class="price">
+            <div class="tag">10 Pi</div>
+            <button class="btn" data-buy="giftElite">Offrir</button>
+          </div>
+        </div>
+
+        <div class="shopCard">
+          <h3>Pack Vengeance</h3>
+          <p>Essentiel : 1 Pi/mois. Élite : inclus. (MVP : statut local)</p>
+          <div class="price">
+            <div class="tag">1 Pi / mois</div>
+            <button class="btn" data-buy="vengeance">Activer</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    /***********************
+     * FIREBASE (Firestore)
+     ***********************/
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCrnYa3VYKZlZer1R1H-k7IcTLmGaho3Qs",
+      authDomain: "gold-pixel.firebaseapp.com",
+      projectId: "gold-pixel",
+      storageBucket: "gold-pixel.firebasestorage.app",
+      messagingSenderId: "483082801795",
+      appId: "1:483082801795:web:96e6ba329bab67e53841b6"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    /***********************
+     * CONFIG (MVP)
+     ***********************/
+    const WORLD_W = 100;
+    const WORLD_H = 100;
+    const CELL = 10;
+
+    const PLAYER_ID = "mvp_local_user";
+    const PACK = "ELITE"; // "ESSENTIEL" ou "ELITE"
+    const STOCK_MAX = (PACK === "ELITE") ? 30 : 15;
+    const RECHARGE_MS = (PACK === "ELITE") ? 2 * 60 * 1000 : 4 * 60 * 1000;
+    const PLACE_COOLDOWN_MS = 30 * 1000;
+    const UNDO_WINDOW_MS = 10 * 1000;
+
+    /***********************
+     * UI REFS
+     ***********************/
+    const toast = document.getElementById("toast");
+
+    const orientOverlay = document.getElementById("orientOverlay");
+    const btnContinuePortrait = document.getElementById("btnContinuePortrait");
+    const btnOk = document.getElementById("btnOk");
+
+    const hudToggleBtn = document.getElementById("hudToggleBtn");
+
+    const sentinelBtn = document.getElementById("sentinelBtn");
+    const sentinelDot = document.getElementById("sentinelDot");
+    const sentinelState = document.getElementById("sentinelState");
+    const sentinelTxt = document.getElementById("sentinelTxt");
+
+    const stockNowEl = document.getElementById("stockNow");
+    const stockMaxEl = document.getElementById("stockMax");
+    const stockBarEl = document.getElementById("stockBar");
+    const cooldownTxt = document.getElementById("cooldownTxt");
+
+    const shieldTxt = document.getElementById("shieldTxt");
+    const shieldTime = document.getElementById("shieldTime");
+    const shieldBar = document.getElementById("shieldBar");
+
+    const coordsBadge = document.getElementById("coordsBadge");
+    const coordsMini = document.getElementById("coordsMini");
+
+    const tabStd = document.getElementById("tabStd");
+    const tabPrem = document.getElementById("tabPrem");
+    const swatchesEl = document.getElementById("swatches");
+
+    const bigSw = document.getElementById("bigSw");
+    const colorEl = document.getElementById("colorEl");
+    const colorHex = document.getElementById("colorHex");
+    const colorName = document.getElementById("colorName");
+    const pipetteBtn = document.getElementById("pipetteBtn");
+
+    const undoBtn = document.getElementById("undoBtn");
+
+    const shopBtn = document.getElementById("shopBtn");
+    const shopBackdrop = document.getElementById("shopBackdrop");
+    const shopClose = document.getElementById("shopClose");
+
+    const layerBtn = document.getElementById("layerBtn");
+
+    /***********************
+     * Toast helper
+     ***********************/
+    let toastTimer=null;
+    function toastMsg(html, ms=1600){
+      toast.innerHTML = html;
+      toast.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer=setTimeout(()=>toast.classList.remove("show"), ms);
+    }
+
+    /***********************
+     * Orientation soft lock
+     ***********************/
+    let portraitAllowed = false;
+    function isPortrait(){
+      return window.matchMedia("(orientation: portrait)").matches;
+    }
+    function refreshOrientationOverlay(){
+      if(isPortrait() && !portraitAllowed){
+        orientOverlay.classList.add("show");
+      }else{
+        orientOverlay.classList.remove("show");
+      }
+    }
+    btnContinuePortrait.addEventListener("click", ()=>{
+      portraitAllowed = true;
+      refreshOrientationOverlay();
+      toastMsg("Mode portrait autorisé (soft lock).");
+    });
+    btnOk.addEventListener("click", refreshOrientationOverlay);
+    window.addEventListener("resize", refreshOrientationOverlay);
+    refreshOrientationOverlay();
+
+    /***********************
+     * HUD hide/show (placeMode)
+     * -> Tu voulais: “tout le HUD disparaît quand on pose”
+     * Ici: quand tu es en mode pose (MAT), on masque title/sub/status.
+     * Le dock palette/actions reste.
+     ***********************/
+    let placeMode = false;
+    function setPlaceMode(on){
+      placeMode = !!on;
+      document.body.classList.toggle("placeMode", placeMode);
+      hudToggleBtn.textContent = placeMode ? "HUD" : "HUD";
+      hudToggleBtn.classList.toggle("ghost", !placeMode);
+    }
+    // Bouton HUD = toggle manuel (utile si tu veux voir les stats rapidement)
+    hudToggleBtn.addEventListener("click", ()=>{
+      setPlaceMode(!document.body.classList.contains("placeMode"));
+      toastMsg(document.body.classList.contains("placeMode") ? "HUD masqué (pose)" : "HUD affiché");
+    });
+
+    /***********************
+     * Sentinel (MVP toggle)
+     ***********************/
+    let sentinelAlert=false;
+    function setSentinelAlert(on){
+      sentinelAlert=!!on;
+      sentinelBtn.classList.toggle("alert", sentinelAlert);
+      sentinelState.textContent = sentinelAlert ? "ALERTE" : "OK";
+      sentinelState.classList.toggle("cyan", !sentinelAlert);
+      sentinelTxt.textContent = sentinelAlert ? "Activité détectée" : "Surveillance";
+    }
+    sentinelBtn.addEventListener("click", ()=>{
+      setSentinelAlert(!sentinelAlert);
+      toastMsg(sentinelAlert ? "Sentinelle: <i>ALERTE</i>" : "Sentinelle: <i>OK</i>");
+    });
+    setSentinelAlert(false);
+
+    /***********************
+     * Canvas + Pan/Zoom (tactile)
+     ***********************/
+    const viewport = document.getElementById("viewport");
+    const layer = document.getElementById("layer");
+    const canvas = document.getElementById("board");
+    const ctx = canvas.getContext("2d", { alpha: false });
+
+    canvas.width  = WORLD_W * CELL;
+    canvas.height = WORLD_H * CELL;
+
+    function clearBoard(){
+      ctx.fillStyle = "rgba(0,0,0,0.88)";
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.strokeStyle = "rgba(255,255,255,0.035)";
+      for(let x=0;x<=WORLD_W;x++){
+        ctx.beginPath(); ctx.moveTo(x*CELL+0.5,0); ctx.lineTo(x*CELL+0.5,canvas.height); ctx.stroke();
+      }
+      for(let y=0;y<=WORLD_H;y++){
+        ctx.beginPath(); ctx.moveTo(0,y*CELL+0.5); ctx.lineTo(canvas.width,y*CELL+0.5); ctx.stroke();
+      }
+    }
+    clearBoard();
+
+    let view = { zoom: 1, panX: -(WORLD_W*CELL)/2, panY: -(WORLD_H*CELL)/2 };
+    function applyTransform(){
+      const x = view.panX * view.zoom;
+      const y = view.panY * view.zoom;
+      layer.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px) scale(${view.zoom})`;
+    }
+    applyTransform();
+
+    function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+    function distance(a,b){
+      const dx=a.clientX-b.clientX;
+      const dy=a.clientY-b.clientY;
+      return Math.sqrt(dx*dx+dy*dy);
+    }
+    function pt(e){ return e.touches?.[0] ? {x:e.touches[0].clientX,y:e.touches[0].clientY} : {x:e.clientX,y:e.clientY}; }
+
+    // Drag (1 doigt / souris)
+    let dragging=false;
+    let dragStart={x:0,y:0, panX:0, panY:0};
+
+    viewport.addEventListener("pointerdown",(e)=>{
+      dragging=true;
+      const p=pt(e);
+      dragStart={x:p.x,y:p.y, panX:view.panX, panY:view.panY};
+      viewport.setPointerCapture(e.pointerId);
+    });
+    viewport.addEventListener("pointermove",(e)=>{
+      const p=pt(e);
+      const c = screenToCell(p.x,p.y);
+      coordsBadge.innerHTML = `X: <b>${c.x}</b> | Y: <b>${c.y}</b>`;
+      coordsMini.textContent = `${c.x} ; ${c.y}`;
+      if(!dragging) return;
+      const dx=(p.x-dragStart.x)/view.zoom;
+      const dy=(p.y-dragStart.y)/view.zoom;
+      view.panX=dragStart.panX+dx;
+      view.panY=dragStart.panY+dy;
+      applyTransform();
+    });
+    viewport.addEventListener("pointerup",()=> dragging=false);
+
+    // Pinch zoom
+    let pinch=false;
+    let pinchDist=0;
+    let pinchZoom=1;
+
+    viewport.addEventListener("touchstart",(e)=>{
+      if(e.touches.length===2){
+        pinch=true;
+        pinchDist = distance(e.touches[0], e.touches[1]);
+        pinchZoom = view.zoom;
+      }
+    }, {passive:false});
+
+    viewport.addEventListener("touchmove",(e)=>{
+      if(pinch && e.touches.length===2){
+        e.preventDefault();
+        const d = distance(e.touches[0], e.touches[1]);
+        const factor = d / pinchDist;
+        view.zoom = clamp(pinchZoom * factor, 0.5, 8);
+        applyTransform();
+      }
+    }, {passive:false});
+
+    viewport.addEventListener("touchend",(e)=>{
+      if(e.touches.length<2) pinch=false;
+    });
+
+    /***********************
+     * Pixel mapping
+     ***********************/
+    function screenToCell(clientX, clientY){
+      const rect = viewport.getBoundingClientRect();
+      const sx = clientX - (rect.left + rect.width/2);
+      const sy = clientY - (rect.top  + rect.height/2);
+
+      const wx = (sx / view.zoom) - view.panX + (WORLD_W*CELL)/2;
+      const wy = (sy / view.zoom) - view.panY + (WORLD_H*CELL)/2;
+
+      const x = Math.floor(wx / CELL);
+      const y = Math.floor(wy / CELL);
+
+      return { x: clamp(x,0,WORLD_W-1), y: clamp(y,0,WORLD_H-1) };
+    }
+
+    function drawPixel(x,y,color){
+      ctx.fillStyle = color;
+      ctx.fillRect(x*CELL, y*CELL, CELL, CELL);
+    }
+
+    /***********************
+     * Palette
+     ***********************/
+    const PALETTE_STANDARD = [
+      "#FF0000","#FFA500","#FFFF00","#00FF00","#00FFFF","#0000FF","#8A2BE2",
+      "#FFFFFF","#C0C0C0","#808080","#000000","#8B4513","#FFC0CB","#00A86B"
+    ];
+    const PALETTE_PREMIUM = [
+      "#D6A63A","#F0C85A","#B8860B","#FFD700","#C9B037","#E5E4E2",
+      "#37C6FF","#00B7FF","#1E90FF","#7FFFD4","#FF3B3B","#FF1493"
+    ];
+
+    let activePalette="std"; // std | prem
+    function highlightSwatch(hex){
+      const all=[...swatchesEl.querySelectorAll(".sw")];
+      all.forEach(el=> el.classList.toggle("active", (el.title||"").toLowerCase()===hex.toLowerCase()));
+    }
+
+    function setColor(hex){
+      colorEl.value = hex;
+      bigSw.style.background = hex;
+      colorHex.textContent = hex.toUpperCase();
+      colorName.textContent = (hex.toLowerCase()==="#ff0000") ? "Rouge vif" : "Couleur";
+      highlightSwatch(hex);
+    }
+
+    function renderPalette(){
+      swatchesEl.innerHTML="";
+      const arr = (activePalette==="std") ? PALETTE_STANDARD : PALETTE_PREMIUM;
+      arr.forEach(hex=>{
+        const d=document.createElement("div");
+        d.className="sw";
+        d.style.background=hex;
+        d.title=hex;
+        d.addEventListener("click", ()=> setColor(hex));
+        swatchesEl.appendChild(d);
+      });
+      highlightSwatch(colorEl.value);
+    }
+
+    tabStd.addEventListener("click", ()=>{
+      activePalette="std";
+      tabStd.classList.add("active");
+      tabPrem.classList.remove("active");
+      renderPalette();
+      toastMsg("Palette: <i>Standard</i>", 1100);
+    });
+    tabPrem.addEventListener("click", ()=>{
+      activePalette="prem";
+      tabPrem.classList.add("active");
+      tabStd.classList.remove("active");
+      renderPalette();
+      toastMsg("Palette: <i>Premium</i>", 1100);
+    });
+
+    colorEl.addEventListener("input", ()=> setColor(colorEl.value));
+    renderPalette();
+    setColor(colorEl.value);
+
+    /***********************
+     * Pipette
+     ***********************/
+    let pipette=false;
+    pipetteBtn.addEventListener("click", ()=>{
+      pipette=!pipette;
+      pipetteBtn.classList.toggle("active", pipette);
+      toastMsg(pipette ? "Pipette activée" : "Pipette désactivée");
+    });
+
+    /***********************
+     * Réservoir + cooldown
+     ***********************/
+    let stock = STOCK_MAX;
+    let lastPlaceAt = 0;
+    let nextRechargeAt = Date.now() + RECHARGE_MS;
+
+    stockMaxEl.textContent = STOCK_MAX;
+
+    function fmtMMSS(ms){
+      ms=Math.max(0,ms);
+      const s=Math.floor(ms/1000);
+      const m=Math.floor(s/60);
+      const r=s%60;
+      return String(m).padStart(2,"0")+":"+String(r).padStart(2,"0");
+    }
+    function fmtHHMMSS(ms){
+      ms=Math.max(0,ms);
+      const s=Math.floor(ms/1000);
+      const h=Math.floor(s/3600);
+      const m=Math.floor((s%3600)/60);
+      const r=s%60;
+      return String(h).padStart(2,"0")+":"+String(m).padStart(2,"0")+":"+String(r).padStart(2,"0");
+    }
+
+    function updateReservoirUI(){
+      stockNowEl.textContent = stock;
+      stockMaxEl.textContent = STOCK_MAX;
+      const pct = Math.min(100, (stock / STOCK_MAX) * 100);
+      stockBarEl.style.width = pct + "%";
+      const now=Date.now();
+      const cd = Math.max(0, (lastPlaceAt + PLACE_COOLDOWN_MS) - now);
+      cooldownTxt.textContent = fmtMMSS(cd);
+    }
+
+    /***********************
+     * Dôme (timer MVP)
+     ***********************/
+    let shieldEndAt = 0;
+    let shieldTotalMs = 0;
+
+    function activateShield(hours){
+      const ms = hours * 60 * 60 * 1000;
+      shieldTotalMs = ms;
+      shieldEndAt = Date.now() + ms;
+      toastMsg(`Dôme activé: <i>${hours}H</i>`);
+    }
+
+    function updateShieldUI(){
+      const now = Date.now();
+      const active = shieldEndAt > now;
+      if(!active){
+        shieldTxt.textContent = "Inactif";
+        shieldTime.textContent = "--:--:--";
+        shieldBar.style.width = "0%";
+        shieldTxt.classList.add("muted");
+        return;
+      }
+      shieldTxt.classList.remove("muted");
+      shieldTxt.textContent = "Actif";
+      const left = shieldEndAt - now;
+      shieldTime.textContent = fmtHHMMSS(left);
+      const pct = clamp((left / shieldTotalMs) * 100, 0, 100);
+      shieldBar.style.width = pct + "%";
+    }
+
+    /***********************
+     * Firestore sync pixels
+     ***********************/
+    const pixelCache = Object.create(null);
+    function pixelId(x,y){ return `${x}_${y}`; }
+
+    // Undo tracking
+    let lastAction = null; // {id, x,y, prevColor, prevExists, at}
+    function updateUndoUI(){
+      if(!lastAction){ undoBtn.style.display="none"; return; }
+      const left = (lastAction.at + UNDO_WINDOW_MS) - Date.now();
+      if(left<=0){ lastAction=null; undoBtn.style.display="none"; return; }
+      undoBtn.style.display="inline-flex";
+      undoBtn.textContent = `⟲ Annuler (${Math.ceil(left/1000)}s)`;
+    }
+
+    undoBtn.addEventListener("click", async ()=>{
+      if(!lastAction) return;
+      const left = (lastAction.at + UNDO_WINDOW_MS) - Date.now();
+      if(left<=0) return;
+
+      const id = lastAction.id;
+
+      if(!lastAction.prevExists){
+        await deleteDoc(doc(db,"pixels",id));
+        delete pixelCache[id];
+        clearBoard();
+        for(const k in pixelCache){
+          const p=pixelCache[k];
+          drawPixel(p.x,p.y,p.color);
+        }
+      }else{
+        await setDoc(doc(db,"pixels",id), {
+          x:lastAction.x, y:lastAction.y,
+          color:lastAction.prevColor,
+          updatedAt: Date.now()
+        }, { merge:true });
+      }
+
+      stock++; // refund
+      toastMsg("Annulé ✅ (pixel recrédité)");
+      lastAction=null;
+      updateReservoirUI();
+      updateUndoUI();
+    });
+
+    // Realtime updates
+    onSnapshot(collection(db,"pixels"), (snapshot)=>{
+      snapshot.docChanges().forEach((change)=>{
+        const id = change.doc.id;
+        if(change.type === "removed"){
+          delete pixelCache[id];
+          clearBoard();
+          for(const k in pixelCache){
+            const p=pixelCache[k];
+            drawPixel(p.x,p.y,p.color);
+          }
+          return;
+        }
+        const data = change.doc.data();
+        pixelCache[id] = data;
+        drawPixel(data.x, data.y, data.color);
+      });
+    });
+
+    /***********************
+     * Placement logic
+     * -> Quand tu poses, on bascule automatiquement en “place mode”
+     * (HUD masqué sauf dock palette), pour enchaîner les poses.
+     ***********************/
+    let placingTool = "mat"; // mat | eraser | plan (MVP)
+    function setTool(t){
+      placingTool = t;
+      // Pour ton besoin: le HUD disparaît quand on pose => on préfère être en place mode quand MAT actif
+      setPlaceMode(t === "mat");
+      toastMsg(`Outil: <i>${t.toUpperCase()}</i>`, 1100);
+    }
+    // Ici on n’affiche pas de boutons MAT/GOMME/PLAN (tu les avais avant),
+    // mais tu peux les remettre plus tard. Pour l’instant: MAT par défaut.
+    setTool("mat");
+
+    viewport.addEventListener("click", async (e)=>{
+      const now=Date.now();
+
+      const p = pt(e);
+      const cell = screenToCell(p.x,p.y);
+      const id = pixelId(cell.x, cell.y);
+
+      // Pipette
+      if(pipette){
+        const existing = pixelCache[id];
+        if(existing?.color){
+          setColor(existing.color);
+          toastMsg(`Pipette: <i>${existing.color}</i>`);
+        }else{
+          toastMsg("Pipette: aucune couleur ici");
+        }
+        pipette=false;
+        pipetteBtn.classList.remove("active");
+        return;
+      }
+
+      // Cooldown
+      if(now < lastPlaceAt + PLACE_COOLDOWN_MS){
+        toastMsg("⏳ Délai de sécurité (30s)");
+        return;
+      }
+
+      if(placingTool==="plan"){
+        toastMsg("Plan (à faire ensuite)");
+        return;
+      }
+
+      // Eraser (MVP: efface si existe)
+      const prev = pixelCache[id];
+      const prevExists = !!prev;
+      const prevColor = prev?.color || null;
+
+      if(placingTool==="eraser"){
+        if(!prevExists){
+          toastMsg("Gomme: rien ici");
+          return;
+        }
+        await deleteDoc(doc(db,"pixels",id));
+        lastPlaceAt = now;
+        toastMsg("Gommé ✅");
+        return;
+      }
+
+      // Mat (pose)
+      if(stock <= 0){
+        toastMsg("Stock vide. Boutique ⚔");
+        return;
+      }
+
+      await setDoc(doc(db, "pixels", id), {
+        x: cell.x, y: cell.y,
+        color: colorEl.value,
+        updatedAt: Date.now(),
+        by: PLAYER_ID
+      }, { merge: true });
+
+      stock--;
+      lastPlaceAt = now;
+
+      lastAction = {
+        id,
+        x: cell.x, y: cell.y,
+        prevExists,
+        prevColor,
+        at: now
+      };
+
+      // Auto “place mode”
+      setPlaceMode(true);
+
+      updateReservoirUI();
+      updateUndoUI();
+    });
+
+    /***********************
+     * Shop modal + actions
+     ***********************/
+    function openShop(){ shopBackdrop.classList.add("show"); }
+    function closeShop(){ shopBackdrop.classList.remove("show"); }
+
+    shopBtn.addEventListener("click", openShop);
+    shopClose.addEventListener("click", closeShop);
+    shopBackdrop.addEventListener("click", (e)=>{
+      if(e.target === shopBackdrop) closeShop();
+    });
+
+    // Fake Pi balance (MVP)
+    let piBalance = 0.0;
+    const piBalanceEl = document.getElementById("piBalance");
+    function setPi(v){
+      piBalance = Math.max(0, Math.round(v*10)/10);
+      piBalanceEl.textContent = piBalance.toFixed(1);
+    }
+    setPi(0.0);
+
+    shopBackdrop.addEventListener("click", (e)=>{
+      const btn = e.target.closest("[data-buy]");
+      if(!btn) return;
+
+      const type = btn.dataset.buy;
+
+      if(type==="px100"){ stock += 100; setPi(piBalance - 1); toastMsg("Achat: <i>+100 pixels</i>"); }
+      if(type==="px250"){ stock += 250; setPi(piBalance - 2); toastMsg("Achat: <i>+250 pixels</i>"); }
+      if(type==="dome4"){ activateShield(4); setPi(piBalance - 0.5); }
+      if(type==="dome8"){ activateShield(8); setPi(piBalance - 1); }
+      if(type==="don01"){ toastMsg("Don: <i>0.1 Pi</i> (MVP)"); setPi(piBalance - 0.1); }
+      if(type==="donAnon"){
+        const to = document.getElementById("anonTo").value.trim();
+        toastMsg(to ? `Don anonyme → <i>${to}</i>` : "Entre un pseudo cible");
+        if(to) setPi(piBalance - 0.1);
+      }
+      if(type==="giftElite"){
+        const to = document.getElementById("giftTo").value.trim();
+        toastMsg(to ? `Offre Élite → <i>${to}</i>` : "Entre un pseudo cible");
+        if(to) setPi(piBalance - 10);
+      }
+      if(type==="vengeance"){
+        toastMsg("Pack Vengeance activé (MVP)");
+        setPi(piBalance - 1);
+      }
+
+      updateReservoirUI();
+    });
+
+    /***********************
+     * Calques (placeholder)
+     ***********************/
+    layerBtn.addEventListener("click", ()=>{
+      toastMsg("Calques: (placeholder) — à brancher ensuite (1 à 5 modèles)");
+    });
+
+    /***********************
+     * Main loop
+     ***********************/
+    setInterval(()=>{
+      const now=Date.now();
+      if(stock < STOCK_MAX && now >= nextRechargeAt){
+        stock++;
+        nextRechargeAt = now + RECHARGE_MS;
+      }
+      updateReservoirUI();
+      updateShieldUI();
+      updateUndoUI();
+    }, 250);
+
+    updateReservoirUI();
+    updateShieldUI();
+  </script>
+</body>
+</html>
